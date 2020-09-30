@@ -44,6 +44,17 @@ def decrypt(key, source, decode=True):
     if data[-padding:] != bytes([padding]) * padding:  # Python 2.x: chr(padding) * padding
         raise ValueError("Invalid padding...")
     return data[:-padding]  # remove the padding
+    
+   
+def listen_if_ok():
+	# listen if ok
+    msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+    if msg == 'ok':
+        pass
+    elif msg == '999':
+        client.retrieve_session_key()
+    else:
+        raise RuntimeError("operation failed")
 
 
 ############ helper funcs ###########
@@ -74,15 +85,7 @@ def login_verify():
 
     ciphertext = client.aes.encrypt('login')
     client.sock.sendall(ciphertext)
-
-    # listen if ok
-    msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
-    if msg == 'ok':
-        pass
-    elif msg == '999':
-        client.retrieve_session_key()
-    else:
-        raise RuntimeError("login failed")
+    listen_if_ok()
 
     # read credentials
     username_info = username_verify.get()
@@ -116,15 +119,7 @@ def register_user():
     # send register request
     ciphertext = client.aes.encrypt('register')
     client.sock.sendall(ciphertext)
-
-    # listen if ok
-    msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
-    if msg == 'ok':
-        pass
-    elif msg == '999':
-        client.retrieve_session_key()
-    else:
-        raise RuntimeError("registration failed")
+    listen_if_ok()
 
     # read credentials
     username_info = username.get()
@@ -170,6 +165,7 @@ def notepad_menu():
     def on_closing():
         notepad_menu_screen.destroy()
         client.sock.sendall(client.aes.encrypt('logout'))
+        listen_if_ok()
 
     notepad_menu_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -184,15 +180,7 @@ def save_text():
     text = inputtxt.get("1.0", "end-1c")
 
     client.sock.sendall(client.aes.encrypt('save_text'))
-
-    # listen if ok
-    msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
-    if msg == 'ok':
-        pass
-    elif msg == '999':
-        client.retrieve_session_key()
-    else:
-        raise RuntimeError("saving failed")
+    listen_if_ok()
 
     encrypted = encrypt(password, text)
 
@@ -275,6 +263,7 @@ def login():
     def on_closing():
         login_screen.destroy()
         client.sock.sendall(client.aes.encrypt('logout'))
+        listen_if_ok()
 
     login_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -311,6 +300,7 @@ def register():
     def on_closing():
         register_screen.destroy()
         client.sock.sendall(client.aes.encrypt('logout'))
+        listen_if_ok()
 
     register_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -347,6 +337,7 @@ def main_account_screen():
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             main_screen.destroy()
             client.sock.sendall(client.aes.encrypt('exit'))
+            listen_if_ok()
 
     main_screen.protocol("WM_DELETE_WINDOW", on_closing)
 

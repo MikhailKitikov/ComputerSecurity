@@ -122,10 +122,6 @@ class Server:
                 elif msg == 'login':
                     print('Starting login...')
 
-                    # send ok
-                    msg = client.aes.encrypt('ok')
-                    client.sock.sendall(msg)
-
                     # get credentials
                     username_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
                     password_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
