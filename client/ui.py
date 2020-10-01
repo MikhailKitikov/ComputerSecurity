@@ -21,32 +21,32 @@ import pickle
 from tkinter.scrolledtext import ScrolledText
 
 
-MSGLEN = 512
+MSGLEN = 1024
 IP = 'localhost'
 PORT = 5000
 
 
 def encrypt(key, source, encode=True):
-	key = SHA256.new(key.encode()).digest()  # use SHA-256 over our key to get a proper-sized AES key
-	IV = Random.new().read(AES.block_size)  # generate IV
+	key = SHA256.new(key.encode()).digest()
+	IV = Random.new().read(AES.block_size)
 	encryptor = AES.new(key, AES.MODE_CBC, IV)
-	padding = AES.block_size - len(source) % AES.block_size  # calculate needed padding
-	source += bytes([padding]) * padding  # Python 2.x: source += chr(padding) * padding
-	data = IV + encryptor.encrypt(source)  # store the IV at the beginning and encrypt
+	padding = AES.block_size - len(source) % AES.block_size
+	source += bytes([padding]) * padding
+	data = IV + encryptor.encrypt(source)
 	return base64.b64encode(data).decode("latin-1") if encode else data
 
 
 def decrypt(key, source, decode=True):
 	if decode:
 		source = base64.b64decode(source.encode('utf-8'))
-	key = SHA256.new(key).digest()  # use SHA-256 over our key to get a proper-sized AES key
-	IV = source[:AES.block_size]  # extract the IV from the beginning
+	key = SHA256.new(key).digest()
+	IV = source[:AES.block_size]
 	decryptor = AES.new(key, AES.MODE_CBC, IV)
-	data = decryptor.decrypt(source[AES.block_size:])  # decrypt
-	padding = data[-1]  # pick the padding value from the end; Python 2.x: ord(data[-1])
-	if data[-padding:] != bytes([padding]) * padding:  # Python 2.x: chr(padding) * padding
+	data = decryptor.decrypt(source[AES.block_size:])
+	padding = data[-1]
+	if data[-padding:] != bytes([padding]) * padding:
 		raise ValueError("Invalid padding...")
-	return data[:-padding]  # remove the padding
+	return data[:-padding]
 	
    
 def listen_if_ok():
@@ -55,8 +55,7 @@ def listen_if_ok():
 		pass
 	elif msg == '999':
 		client.retrieve_session_key()
-	else:
-		raise RuntimeError("operation failed")
+	else: pass
 
 
 ############ helper funcs ###########
@@ -114,8 +113,7 @@ def login_verify():
 		client.username = username_info
 		client.password = password_info
 		notepad_menu()
-	else:
-		raise RuntimeError('Unknown response')
+	else: login_verify()
 
 
 def register_user():
@@ -145,8 +143,7 @@ def register_user():
 		client.username = username_info
 		client.password = password_info
 		notepad_menu()
-	else:
-		raise RuntimeError('Unknown response')
+	else: register_user()
 
 
 def delete_login_screen():
@@ -168,9 +165,9 @@ def notepad_menu():
 	Label(notepad_menu_screen, text="", height='15').pack()
 
 	def on_closing():
-		notepad_menu_screen.destroy()
 		client.sock.sendall(client.aes.encrypt('logout'))
 		listen_if_ok()
+		notepad_menu_screen.destroy()
 
 	notepad_menu_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -198,9 +195,7 @@ def save_new_text(filename, inputtxt, screen):
 	elif response == '0':
 		Notifier.show_message('Success', 'Text saved', screen, True)
 		notepad_menu()
-	else:
-		raise RuntimeError('Unknown response')
-
+	else: pass
 
 def save_text(filename, inputtxt, screen):
 
@@ -219,9 +214,7 @@ def save_text(filename, inputtxt, screen):
 	elif response == '0':
 		Notifier.show_message('Success', 'Text saved', screen, True)
 		notepad_menu()
-	else:
-		print(response)
-		raise RuntimeError('Unknown response')
+	else: pass
 
 
 def save_as(inputtxt):
@@ -299,7 +292,6 @@ def edit_selected_notepad(textname):
 	client.sock.sendall(ciphertext)
 	
 	text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
-	#print(text)
 	decrypted = decrypt(client.password.encode(), text.decode())
 	
 	inputtxt.delete(1.0, END)
@@ -325,6 +317,8 @@ def edit_notepad():
 		Notifier.show_message('Fail', 'You have no notepads', save_as_screen)
 	elif response == '0':
 	
+		pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	
 		listbox = Listbox(edit_notepad_screen, height=20,width=50) 
 		scrollbar = Scrollbar(edit_notepad_screen) 
 		#scrollbar.pack(side = RIGHT, fill = BOTH) 
@@ -349,7 +343,6 @@ def edit_notepad():
 		display.grid(row=1, column=0, ipadx=0)
 		cancel.grid(row=1, column=1, ipadx=0)
 	
-		pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
 		data = pickle.loads(pkl)
 		for values in data: 
 			listbox.insert(END, values) 
@@ -365,8 +358,8 @@ def edit_notepad():
 
 		listbox.bind('<<ListboxSelect>>', onselect)
 	else:
-		print(response)
-		raise RuntimeError('Unknown response')	
+		edit_notepad_screen.destroy()
+		edit_notepad()
 
 
 def delete_notepad():
@@ -513,7 +506,6 @@ class Client:
 		key = rsa.decrypt(self.sock.recv(MSGLEN), self.priv)
 		iv = key
 		self.aes = AES.new(key, AES.MODE_CFB, iv)
-		print('new key:', key)
 
 
 ############ entrypoint ################

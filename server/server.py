@@ -23,12 +23,11 @@ def key_expired(created_at):
 	
 	
 def check_key_expiration(client):
-	# check key expiration
 	if key_expired(client.created_at):
 		client.sock.sendall(client.aes.encrypt('999'))
 		client.generate_aes()
 		client.send_aes()
-		print('New sesion key generated')
+		print('New sesion key generated for client ', client.username)
 	else:
 		msg = client.aes.encrypt('ok')
 		client.sock.sendall(msg)
@@ -37,6 +36,7 @@ def check_key_expiration(client):
 class Client:
 	def __init__(self, sock):
 		self.sock = sock
+		self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 		self.generate_aes()
 		self.authorized = False
 		return
@@ -44,11 +44,11 @@ class Client:
 	def generate_aes(self):
 		self.key = get_random_bytes(16)
 		self.iv = self.key
-		self.aes = AES.new(self.key, AES.MODE_CFB, self.iv)  # session key
+		self.aes = AES.new(self.key, AES.MODE_CFB, self.iv)
 		self.created_at = time()
+		print('new AES key generated at ', self.created_at) 
 
 	def send_aes(self):
-		# send aes
 		msg = rsa.encrypt(self.key, self.pub)
 		self.sock.sendall(msg)
 
@@ -56,6 +56,7 @@ class Client:
 class Server:
 
 	def __init__(self):
+	
 		# load database
 		with open('db/users_db.json', 'r') as file:
 			self.users_db = json.load(file)
@@ -83,6 +84,7 @@ class Server:
 		return
 
 	def handle_client(self, client):
+	
 		# get public rsa
 		try:
 			pub = client.sock.recv(1024).decode()
@@ -91,10 +93,12 @@ class Server:
 			self.clients.remove(client)
 			return
 
+		# send session key
 		client.send_aes()
 
 		while True:
 			try:
+				# receive new message
 				msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 
 				if msg == 'register':
@@ -117,9 +121,14 @@ class Server:
 						self.texts_db[username_info] = {}
 						with open('db/texts_db.json', 'w') as file:
 							json.dump(self.texts_db, file)
+							
+						os.mkdir('data/' + username_info.replace(' ', '_'))
 
 						response = '0'
 						client.authorized = True
+						client.username = username_info
+						client.password = password_info
+						print('Client %s registered' % client.username)
 
 					# send response
 					client.sock.sendall(client.aes.encrypt(response))
@@ -144,6 +153,7 @@ class Server:
 						client.authorized = True
 						client.username = username_info
 						client.password = password_info
+						print('Client %s logged in' % client.username)
 
 					# send response
 					client.sock.sendall(client.aes.encrypt(response))
@@ -160,7 +170,7 @@ class Server:
 					
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
-					filename = 'data/' + textname.replace(' ', '_') + '.txt'
+					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					
 					# decide of response
 					if textname in self.texts_db[client.username]:
@@ -179,6 +189,8 @@ class Server:
 						with open(filename, 'wb') as file:
 							file.write(text.encode())
 							
+						print('Text saved')
+							
 					
 				elif msg == 'save_text':
 				
@@ -191,7 +203,7 @@ class Server:
 					
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
-					filename = 'data/' + textname.replace(' ', '_') + '.txt'
+					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					
 					# decide of response
 					response = '0'
@@ -206,6 +218,8 @@ class Server:
 						
 					with open(filename, 'wb') as file:
 						file.write(text.encode())		
+						
+					print('Text saved')
 							
 				
 				elif msg == 'get_texts':
@@ -239,8 +253,6 @@ class Server:
 						continue
 						
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
-					print(textname)
-					print(self.texts_db[client.username])
 					
 					# decide of response
 					if textname not in self.texts_db[client.username]:
@@ -254,16 +266,16 @@ class Server:
 						client.sock.sendall(client.aes.encrypt(text))
 						
 
-				elif msg == 'logout':
-				
-					print('User logged out')					
+				elif msg == 'logout':					
 					check_key_expiration(client)					
 					client.authorized = False
+					print('Client %s logged out' % client.username)
+					client.username = None
+					client.password = None
 					
 
 				elif msg == 'exit':
-					print('Removing client...')
-					
+					print('Client %s exited' % client.username)
 					self.clients.remove(client)
 					return
 					
