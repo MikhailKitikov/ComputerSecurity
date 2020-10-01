@@ -107,8 +107,8 @@ class Server:
 					check_key_expiration(client)
 
 					# get credentials
-					username_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
-					password_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					username_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+					password_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 
 					# decide of response
 					if username_info in self.users_db:
@@ -140,8 +140,8 @@ class Server:
 					check_key_expiration(client)
 
 					# get credentials
-					username_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
-					password_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					username_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+					password_info = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 
 					# decide of response
 					if username_info not in self.users_db:
@@ -168,7 +168,7 @@ class Server:
 						client.sock.sendall(client.aes.encrypt('888'))
 						continue
 					
-					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
 					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					
@@ -201,7 +201,7 @@ class Server:
 						client.sock.sendall(client.aes.encrypt('888'))
 						continue
 					
-					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
 					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					
@@ -226,22 +226,25 @@ class Server:
 					
 					print('Getting texts...')					
 					check_key_expiration(client)
+					print('after')
 					
 					if not client.authorized:
+						print('wtf')
 						client.sock.sendall(client.aes.encrypt('888'))
 						continue
-						
-					texts = pickle.dumps(list(self.texts_db[client.username].keys()))
+				
+					keys = list(self.texts_db[client.username].keys())
+					print('keys: ', keys)
 					
 					# decide of response
-					if len(texts) == 0:
+					if len(keys) == 0:
 						response = '1'
-						client.sock.sendall(client.aes.encrypt(response))
 					else:
 						response = '0'
-						client.sock.sendall(client.aes.encrypt(response))
-						client.sock.sendall(client.aes.encrypt(texts))
-						
+					texts = pickle.dumps(keys)
+					client.sock.sendall(client.aes.encrypt(response))
+					client.sock.sendall(client.aes.encrypt(texts))
+					
 						
 				elif msg == 'get_text':
 					
@@ -252,7 +255,7 @@ class Server:
 						client.sock.sendall(client.aes.encrypt('888'))
 						continue
 						
-					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 					
 					# decide of response
 					if textname not in self.texts_db[client.username]:
@@ -267,7 +270,7 @@ class Server:
 						
 
 				elif msg == 'logout':					
-					check_key_expiration(client)					
+#					check_key_expiration(client)					
 					client.authorized = False
 					print('Client %s logged out' % client.username)
 					client.username = None

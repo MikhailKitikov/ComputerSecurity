@@ -12,7 +12,7 @@ import json
 import os
 from Crypto.Random import get_random_bytes
 from base64 import b64encode
-from hashlib import sha256
+from hashlib import sha256, sha512
 import base64
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
@@ -50,7 +50,7 @@ def decrypt(key, source, decode=True):
 	
    
 def listen_if_ok():
-	msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+	msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 	if msg == 'ok':
 		pass
 	elif msg == '999':
@@ -93,7 +93,7 @@ def login_verify():
 	password_info = password_verify.get()
 
 	# send credentials
-	encoded_pass = sha256()
+	encoded_pass = sha512()
 	encoded_pass.update(password_info.encode('utf-8'))
 	client.sock.sendall(client.aes.encrypt(username_info.encode()))
 	client.sock.sendall(client.aes.encrypt(encoded_pass.hexdigest()))
@@ -102,7 +102,7 @@ def login_verify():
 	password_login_entry.delete(0, END)
 
 	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 	if response == '1':
 		Notifier.show_message('Fail', 'User does not exist', login_screen)
 		username_login_entry.delete(0, END)
@@ -113,7 +113,7 @@ def login_verify():
 		client.username = username_info
 		client.password = password_info
 		notepad_menu()
-	else: login_verify()
+	else: pass
 
 
 def register_user():
@@ -127,13 +127,13 @@ def register_user():
 	password_info = password.get()
 
 	# send credentials
-	encoded_pass = sha256()
+	encoded_pass = sha512()
 	encoded_pass.update(password_info.encode())
 	client.sock.sendall(client.aes.encrypt(username_info))
 	client.sock.sendall(client.aes.encrypt(encoded_pass.hexdigest()))
 
 	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 	if response == '1':
 		Notifier.show_message('Fail', 'User already exists', register_screen)
 	elif response == '0':
@@ -143,7 +143,7 @@ def register_user():
 		client.username = username_info
 		client.password = password_info
 		notepad_menu()
-	else: register_user()
+	else: pass
 
 
 def delete_login_screen():
@@ -166,7 +166,7 @@ def notepad_menu():
 
 	def on_closing():
 		client.sock.sendall(client.aes.encrypt('logout'))
-		listen_if_ok()
+#		listen_if_ok()
 		notepad_menu_screen.destroy()
 
 	notepad_menu_screen.protocol("WM_DELETE_WINDOW", on_closing)
@@ -189,7 +189,7 @@ def save_new_text(filename, inputtxt, screen):
 	client.sock.sendall(client.aes.encrypt(encrypted))
 	
 	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 	if response == '1':
 		Notifier.show_message('Fail', 'Text name is already used', screen)
 	elif response == '0':
@@ -208,7 +208,7 @@ def save_text(filename, inputtxt, screen):
 	client.sock.sendall(client.aes.encrypt(encrypted))
 	
 	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 	if response == '1':
 		Notifier.show_message('Fail', 'Cannot complete', screen)
 	elif response == '0':
@@ -218,7 +218,7 @@ def save_text(filename, inputtxt, screen):
 
 
 def save_as(inputtxt):
-	#global save_as_screen
+	global save_as_screen
 	save_as_screen = Toplevel()
 	save_as_screen.resizable(False, False)
 	save_as_screen.title("Save as")
@@ -233,11 +233,12 @@ def save_as(inputtxt):
 	Button(save_as_screen, text="Save", width=10, height=1, \
 		command=lambda: save_new_text(filename.get(), inputtxt, save_as_screen)).pack()
 
+#### create ####
 
 def create_notepad():
 
 	global create_notepad_screen
-	create_notepad_screen = Toplevel()
+	create_notepad_screen = Toplevel(notepad_menu_screen)
 	create_notepad_screen.resizable(False, False)
 	create_notepad_screen.title("Notepad")
 	create_notepad_screen.geometry("600x600")
@@ -258,10 +259,11 @@ def create_notepad():
 	display.grid(row=1, column=0, ipadx=0)
 	cancel.grid(row=1, column=1, ipadx=0)
 	
+#### edit #####
 	
 def edit_selected_notepad(textname):
 
-	#global edit_selected_notepad_screen
+	global edit_selected_notepad_screen
 	edit_selected_notepad_screen = Toplevel()
 	edit_selected_notepad_screen.resizable(False, False)
 	edit_selected_notepad_screen.title(textname)
@@ -300,11 +302,10 @@ def edit_selected_notepad(textname):
 
 def edit_notepad():
 	global edit_notepad_screen
-	edit_notepad_screen = Toplevel()
+	edit_notepad_screen = Toplevel(notepad_menu_screen)
 	edit_notepad_screen.resizable(False, False)
 	edit_notepad_screen.title("Edit notepad")
 	edit_notepad_screen.geometry("600x600")
-	#Label(edit_notepad_screen, text="Choose notepad").pack()
 	
 	# send edit request
 	ciphertext = client.aes.encrypt('get_texts')
@@ -312,54 +313,60 @@ def edit_notepad():
 	listen_if_ok()
 	
 	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')	
+	pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	
+	listbox = Listbox(edit_notepad_screen, height=20,width=50) 
+	scrollbar = Scrollbar(edit_notepad_screen) 
+	
+	def onselect(evt):
+		w = evt.widget
+		global index, value
+		index = int(w.curselection()[0])
+		value = w.get(index)
+		print ('You selected item %d: "%s"' % (index, value))
+
+	listbox.bind('<<ListboxSelect>>', onselect)
+	
+	def create_proxy(val):
+		if val is None:
+			pass
+		else:
+			edit_selected_notepad(val)
+
+	data = pickle.loads(pkl)
+		
+	display = Button(edit_notepad_screen, height=3,
+					 width=40,
+					 text="Select",
+					 command=lambda: create_proxy(value))
+	cancel = Button(edit_notepad_screen, height=3,
+					width=40,
+					text="Cancel",
+					command=lambda: edit_notepad_screen.destroy())
+					
+	listbox.grid(row=0, column=0, columnspan=2, ipadx=0)
+	display.grid(row=1, column=0, ipadx=0)
+	cancel.grid(row=1, column=1, ipadx=0)
+		
+	listbox.config(yscrollcommand = scrollbar.set) 
+	scrollbar.config(command = listbox.yview) 
+	
+	for values in data: 
+		listbox.insert(END, values) 
+	
+	print('resp', response)
 	if response == '1':
-		Notifier.show_message('Fail', 'You have no notepads', save_as_screen)
-	elif response == '0':
-	
-		pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
-	
-		listbox = Listbox(edit_notepad_screen, height=20,width=50) 
-		scrollbar = Scrollbar(edit_notepad_screen) 
-		#scrollbar.pack(side = RIGHT, fill = BOTH) 
-
-		
-		def create_proxy():
-			if value is None:
-				Notifier.show_message('Notepad', 'None value', edit_notepad_screen)
-			else:
-				edit_selected_notepad(value)
-		
-		display = Button(edit_notepad_screen, height=3,
-						 width=40,
-						 text="Select",
-						 command=lambda: create_proxy())
-		cancel = Button(edit_notepad_screen, height=3,
-						width=40,
-						text="Cancel",
-						command=lambda: edit_notepad_screen.destroy())
-						
-		listbox.grid(row=0, column=0, columnspan=2, ipadx=0)
-		display.grid(row=1, column=0, ipadx=0)
-		cancel.grid(row=1, column=1, ipadx=0)
-	
-		data = pickle.loads(pkl)
-		for values in data: 
-			listbox.insert(END, values) 
-		listbox.config(yscrollcommand = scrollbar.set) 
-		scrollbar.config(command = listbox.yview) 
-		
-		def onselect(evt):
-			w = evt.widget
-			global index, value
-			index = int(w.curselection()[0])
-			value = w.get(index)
-			print ('You selected item %d: "%s"' % (index, value))
-
-		listbox.bind('<<ListboxSelect>>', onselect)
+		messagebox.showerror("not notepads", "empty") 
 	else:
-		edit_notepad_screen.destroy()
-		edit_notepad()
+		pass	
+		
+		
+#### delete #####
+
+def delete_selected_notepad(textname):
+
+	pass
 
 
 def delete_notepad():
@@ -368,7 +375,61 @@ def delete_notepad():
 	delete_notepad_screen.resizable(False, False)
 	delete_notepad_screen.title("Delete notepad")
 	delete_notepad_screen.geometry("600x600")
-	Label(delete_notepad_screen, text="").pack()
+	
+	# send edit request
+	ciphertext = client.aes.encrypt('get_texts')
+	client.sock.sendall(ciphertext)
+	listen_if_ok()
+	
+	# get response
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')	
+	pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	
+	listbox = Listbox(delete_notepad_screen, height=20,width=50) 
+	scrollbar = Scrollbar(delete_notepad_screen) 
+	
+	def onselect(evt):
+		w = evt.widget
+		global index, value
+		index = int(w.curselection()[0])
+		value = w.get(index)
+		print ('You selected item %d: "%s"' % (index, value))
+
+	listbox.bind('<<ListboxSelect>>', onselect)
+	
+	def create_proxy(listbox, ind, val):
+		if val is None:
+			pass
+		else:
+			delete_selected_notepad(val)
+			listbox.delete(ind)
+
+	data = pickle.loads(pkl)
+		
+	display = Button(delete_notepad_screen, height=3,
+					 width=40,
+					 text="Delete",
+					 command=lambda: create_proxy(listbox, index, value))
+	cancel = Button(delete_notepad_screen, height=3,
+					width=40,
+					text="Cancel",
+					command=lambda: delete_notepad_screen.destroy())
+					
+	listbox.grid(row=0, column=0, columnspan=2, ipadx=0)
+	display.grid(row=1, column=0, ipadx=0)
+	cancel.grid(row=1, column=1, ipadx=0)
+		
+	listbox.config(yscrollcommand = scrollbar.set) 
+	scrollbar.config(command = listbox.yview) 
+	
+	for values in data: 
+		listbox.insert(END, values) 
+	
+	print('resp', response)
+	if response == '1':
+		messagebox.showerror("not notepads", "empty") 
+	else:
+		pass
 
 
 ############### login ###################
@@ -383,8 +444,6 @@ def login():
 
 	def on_closing():
 		login_screen.destroy()
-		client.sock.sendall(client.aes.encrypt('logout'.encode()))
-		listen_if_ok()
 
 	login_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -420,8 +479,6 @@ def register():
 
 	def on_closing():
 		register_screen.destroy()
-		client.sock.sendall(client.aes.encrypt('logout'))
-		listen_if_ok()
 
 	register_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
