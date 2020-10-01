@@ -365,8 +365,20 @@ def edit_notepad():
 #### delete #####
 
 def delete_selected_notepad(textname):
-
-	pass
+	# send edit request
+	ciphertext = client.aes.encrypt('delete_text')
+	client.sock.sendall(ciphertext)
+	listen_if_ok()
+	
+	ciphertext = client.aes.encrypt(textname)
+	client.sock.sendall(ciphertext)
+	
+	# get response
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')	
+	if response == '0':
+		Notifier.show_message('Success', 'Removed!', delete_notepad_screen)
+	else:
+		pass	
 
 
 def delete_notepad():

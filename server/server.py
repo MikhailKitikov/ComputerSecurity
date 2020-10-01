@@ -220,6 +220,33 @@ class Server:
 						file.write(text.encode())		
 						
 					print('Text saved')
+					
+					
+				elif msg == 'delete_text':
+				
+					print('Deleting text...')					
+					check_key_expiration(client)
+					#print('1')
+					if not client.authorized:
+						client.sock.sendall(client.aes.encrypt('888'))
+						continue
+					#print('2')
+					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
+					print(textname)
+					# decide of response
+					response = '0'
+
+					# send response
+					client.sock.sendall(client.aes.encrypt(response))
+					
+					del self.texts_db[client.username][textname]
+					with open('db/texts_db.json', 'w') as file:
+						json.dump(self.texts_db, file)
+						
+					os.remove(filename)
+						
+					print('Text removed')
 							
 				
 				elif msg == 'get_texts':
