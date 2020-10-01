@@ -17,6 +17,9 @@ import base64
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto import Random
+import pickle
+from tkinter.scrolledtext import ScrolledText
+
 
 MSGLEN = 512
 IP = 'localhost'
@@ -35,7 +38,7 @@ def encrypt(key, source, encode=True):
 
 def decrypt(key, source, decode=True):
 	if decode:
-		source = base64.b64decode(source.encode("latin-1"))
+		source = base64.b64decode(source.encode('utf-8'))
 	key = SHA256.new(key).digest()  # use SHA-256 over our key to get a proper-sized AES key
 	IV = source[:AES.block_size]  # extract the IV from the beginning
 	decryptor = AES.new(key, AES.MODE_CBC, IV)
@@ -176,9 +179,30 @@ def notepad_menu():
 	Button(notepad_menu_screen, text="Edit", width=50, height=5, command=edit_notepad).pack()
 	Label(notepad_menu_screen, text="", height='2').pack()
 	Button(notepad_menu_screen, text="Delete", width=50, height=5, command=delete_notepad).pack()
+	
+	
+def save_new_text(filename, inputtxt, screen):
+
+	client.sock.sendall(client.aes.encrypt('save_new_text'))
+	listen_if_ok()
+
+	text = inputtxt.get("1.0", "end-1c")
+	encrypted = encrypt(client.password, text.encode())
+	client.sock.sendall(client.aes.encrypt(filename))
+	client.sock.sendall(client.aes.encrypt(encrypted))
+	
+	# get response
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+	if response == '1':
+		Notifier.show_message('Fail', 'Text name is already used', screen)
+	elif response == '0':
+		Notifier.show_message('Success', 'Text saved', screen, True)
+		notepad_menu()
+	else:
+		raise RuntimeError('Unknown response')
 
 
-def save_text(filename):
+def save_text(filename, inputtxt, screen):
 
 	client.sock.sendall(client.aes.encrypt('save_text'))
 	listen_if_ok()
@@ -191,16 +215,17 @@ def save_text(filename):
 	# get response
 	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
 	if response == '1':
-		Notifier.show_message('Fail', 'Textname already exists', save_as_screen)
+		Notifier.show_message('Fail', 'Cannot complete', screen)
 	elif response == '0':
-		Notifier.show_message('Success', 'Text saved', save_as_screen, True)
+		Notifier.show_message('Success', 'Text saved', screen, True)
 		notepad_menu()
 	else:
+		print(response)
 		raise RuntimeError('Unknown response')
 
 
-def save_as():
-	global save_as_screen
+def save_as(inputtxt):
+	#global save_as_screen
 	save_as_screen = Toplevel()
 	save_as_screen.resizable(False, False)
 	save_as_screen.title("Save as")
@@ -213,24 +238,24 @@ def save_as():
 	filename_entry = Entry(save_as_screen, width=30, textvariable=filename)
 	filename_entry.pack()
 	Button(save_as_screen, text="Save", width=10, height=1, \
-		command=lambda: save_text(filename.get())).pack()
+		command=lambda: save_new_text(filename.get(), inputtxt, save_as_screen)).pack()
 
 
 def create_notepad():
+
 	global create_notepad_screen
-	create_notepad_screen = Toplevel(notepad_menu_screen)
+	create_notepad_screen = Toplevel()
 	create_notepad_screen.resizable(False, False)
-	create_notepad_screen.title("Create notepad")
+	create_notepad_screen.title("Notepad")
 	create_notepad_screen.geometry("600x600")
 
-	global inputtxt
 	inputtxt = Text(create_notepad_screen, height=50,
 					width=85,
 					bg="white")
 	display = Button(create_notepad_screen, height=3,
 					 width=40,
 					 text="Save as",
-					 command=lambda: save_as())
+					 command=lambda: save_as(inputtxt))
 	cancel = Button(create_notepad_screen, height=3,
 					width=40,
 					text="Cancel",
@@ -239,15 +264,109 @@ def create_notepad():
 	inputtxt.grid(row=0, column=0, columnspan=2, ipadx=0)
 	display.grid(row=1, column=0, ipadx=0)
 	cancel.grid(row=1, column=1, ipadx=0)
+	
+	
+def edit_selected_notepad(textname):
 
+	#global edit_selected_notepad_screen
+	edit_selected_notepad_screen = Toplevel()
+	edit_selected_notepad_screen.resizable(False, False)
+	edit_selected_notepad_screen.title(textname)
+	edit_selected_notepad_screen.geometry("600x600")
+
+	inputtxt = Text(edit_selected_notepad_screen, height=50,
+					width=85,
+					bg="white")
+	display = Button(edit_selected_notepad_screen, height=3,
+					 width=40,
+					 text="Save",
+					 command=lambda: save_text(textname, inputtxt, edit_selected_notepad_screen))
+	cancel = Button(edit_selected_notepad_screen, height=3,
+					width=40,
+					text="Cancel",
+					command=lambda: edit_selected_notepad_screen.destroy())
+
+	inputtxt.grid(row=0, column=0, columnspan=2, ipadx=0)
+	display.grid(row=1, column=0, ipadx=0)
+	cancel.grid(row=1, column=1, ipadx=0)
+	
+	# send get request
+	ciphertext = client.aes.encrypt('get_text')
+	client.sock.sendall(ciphertext)
+	listen_if_ok()
+	
+	ciphertext = client.aes.encrypt(textname)
+	client.sock.sendall(ciphertext)
+	
+	text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	#print(text)
+	decrypted = decrypt(client.password.encode(), text.decode())
+	
+	inputtxt.delete(1.0, END)
+	inputtxt.insert(END, decrypted)
+		
 
 def edit_notepad():
 	global edit_notepad_screen
-	edit_notepad_screen = Toplevel(notepad_menu_screen)
+	edit_notepad_screen = Toplevel()
 	edit_notepad_screen.resizable(False, False)
 	edit_notepad_screen.title("Edit notepad")
 	edit_notepad_screen.geometry("600x600")
-	Label(edit_notepad_screen, text="").pack()
+	#Label(edit_notepad_screen, text="Choose notepad").pack()
+	
+	# send edit request
+	ciphertext = client.aes.encrypt('get_texts')
+	client.sock.sendall(ciphertext)
+	listen_if_ok()
+	
+	# get response
+	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+	if response == '1':
+		Notifier.show_message('Fail', 'You have no notepads', save_as_screen)
+	elif response == '0':
+	
+		listbox = Listbox(edit_notepad_screen, height=20,width=50) 
+		scrollbar = Scrollbar(edit_notepad_screen) 
+		#scrollbar.pack(side = RIGHT, fill = BOTH) 
+
+		
+		def create_proxy():
+			if value is None:
+				Notifier.show_message('Notepad', 'None value', edit_notepad_screen)
+			else:
+				edit_selected_notepad(value)
+		
+		display = Button(edit_notepad_screen, height=3,
+						 width=40,
+						 text="Select",
+						 command=lambda: create_proxy())
+		cancel = Button(edit_notepad_screen, height=3,
+						width=40,
+						text="Cancel",
+						command=lambda: edit_notepad_screen.destroy())
+						
+		listbox.grid(row=0, column=0, columnspan=2, ipadx=0)
+		display.grid(row=1, column=0, ipadx=0)
+		cancel.grid(row=1, column=1, ipadx=0)
+	
+		pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+		data = pickle.loads(pkl)
+		for values in data: 
+			listbox.insert(END, values) 
+		listbox.config(yscrollcommand = scrollbar.set) 
+		scrollbar.config(command = listbox.yview) 
+		
+		def onselect(evt):
+			w = evt.widget
+			global index, value
+			index = int(w.curselection()[0])
+			value = w.get(index)
+			print ('You selected item %d: "%s"' % (index, value))
+
+		listbox.bind('<<ListboxSelect>>', onselect)
+	else:
+		print(response)
+		raise RuntimeError('Unknown response')	
 
 
 def delete_notepad():
@@ -391,10 +510,10 @@ class Client:
 		self.retrieve_session_key()
 
 	def retrieve_session_key(self):
-		# get session key
 		key = rsa.decrypt(self.sock.recv(MSGLEN), self.priv)
 		iv = key
 		self.aes = AES.new(key, AES.MODE_CFB, iv)
+		print('new key:', key)
 
 
 ############ entrypoint ################

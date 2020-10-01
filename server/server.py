@@ -9,15 +9,17 @@ import os
 from Crypto.Random import get_random_bytes
 from base64 import b64encode
 from time import time
+import pickle
+
 
 MSGLEN = 1024
-IP = 'localhost'
+IP = '0.0.0.0'
 PORT = 5000
-SESSION_KEY_EXPIRATION_TIME = 10
+KEY_EXPIRATION_TIME = 20
 
 
 def key_expired(created_at):
-	return (time() - created_at) > SESSION_KEY_EXPIRATION_TIME
+	return (time() - created_at) > KEY_EXPIRATION_TIME
 	
 	
 def check_key_expiration(client):
@@ -93,7 +95,7 @@ class Server:
 
 		while True:
 			try:
-				msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+				msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 
 				if msg == 'register':
 				
@@ -121,6 +123,7 @@ class Server:
 
 					# send response
 					client.sock.sendall(client.aes.encrypt(response))
+					
 
 				elif msg == 'login':
 				
@@ -145,18 +148,18 @@ class Server:
 					# send response
 					client.sock.sendall(client.aes.encrypt(response))
 					
-				elif msg == 'save_text':
+				elif msg == 'save_new_text':
 				
 					print('Saving text...')					
 					check_key_expiration(client)
 					
 					if not client.authorized:
+
 						client.sock.sendall(client.aes.encrypt('888'))
 						continue
 					
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
-					print(text)
 					filename = 'data/' + textname.replace(' ', '_') + '.txt'
 					
 					# decide of response
@@ -174,14 +177,89 @@ class Server:
 							json.dump(self.texts_db, file)
 							
 						with open(filename, 'wb') as file:
-							file.write(text.encode())		
-										
+							file.write(text.encode())
+							
+					
+				elif msg == 'save_text':
+				
+					print('Saving text...')					
+					check_key_expiration(client)
+					
+					if not client.authorized:
+						client.sock.sendall(client.aes.encrypt('888'))
+						continue
+					
+					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
+					filename = 'data/' + textname.replace(' ', '_') + '.txt'
+					
+					# decide of response
+					response = '0'
+
+					# send response
+					client.sock.sendall(client.aes.encrypt(response))
+					
+					#if response == '0':
+					self.texts_db[client.username][textname] = filename
+					with open('db/texts_db.json', 'w') as file:
+						json.dump(self.texts_db, file)
+						
+					with open(filename, 'wb') as file:
+						file.write(text.encode())		
+							
+				
+				elif msg == 'get_texts':
+					
+					print('Getting texts...')					
+					check_key_expiration(client)
+					
+					if not client.authorized:
+						client.sock.sendall(client.aes.encrypt('888'))
+						continue
+						
+					texts = pickle.dumps(list(self.texts_db[client.username].keys()))
+					
+					# decide of response
+					if len(texts) == 0:
+						response = '1'
+						client.sock.sendall(client.aes.encrypt(response))
+					else:
+						response = '0'
+						client.sock.sendall(client.aes.encrypt(response))
+						client.sock.sendall(client.aes.encrypt(texts))
+						
+						
+				elif msg == 'get_text':
+					
+					print('Getting text...')					
+					check_key_expiration(client)
+					
+					if not client.authorized:
+						client.sock.sendall(client.aes.encrypt('888'))
+						continue
+						
+					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
+					print(textname)
+					print(self.texts_db[client.username])
+					
+					# decide of response
+					if textname not in self.texts_db[client.username]:
+						response = '1'
+						client.sock.sendall(client.aes.encrypt(response))
+						print('bad')
+					else:
+						response = '0'
+						with open(self.texts_db[client.username][textname], 'rb') as file:
+							text = file.read()
+						client.sock.sendall(client.aes.encrypt(text))
+						
 
 				elif msg == 'logout':
 				
 					print('User logged out')					
 					check_key_expiration(client)					
 					client.authorized = False
+					
 
 				elif msg == 'exit':
 					print('Removing client...')
