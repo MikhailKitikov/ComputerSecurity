@@ -10,6 +10,7 @@ from Crypto.Random import get_random_bytes
 from base64 import b64encode
 from time import time
 import pickle
+import select
 
 
 MSGLEN = 1024
@@ -89,6 +90,7 @@ class Server:
 		try:
 			pub = client.sock.recv(1024).decode()
 			client.pub = rsa.key.PublicKey.load_pkcs1(pub, 'PEM')
+			print('rsa got')
 		except:
 			self.clients.remove(client)
 			return
@@ -99,7 +101,15 @@ class Server:
 		while True:
 			try:
 				# receive new message
-				msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+				r, _, _ = select.select([client.sock], [], [])
+				if r:
+					# ready to receive
+					msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+					print('msg got:', msg)
+				else:
+					print('nothing')
+					continue
+				
 
 				if msg == 'register':
 				
@@ -172,24 +182,14 @@ class Server:
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
 					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					
-					# decide of response
-					if textname in self.texts_db[client.username]:
-						response = '1'
-					else:
-						response = '0'
-
-					# send response
-					client.sock.sendall(client.aes.encrypt(response))
-					
-					if response == '0':
-						self.texts_db[client.username][textname] = filename
-						with open('db/texts_db.json', 'w') as file:
-							json.dump(self.texts_db, file)
-							
-						with open(filename, 'wb') as file:
-							file.write(text.encode())
-							
-						print('Text saved')
+					self.texts_db[client.username][textname] = filename
+					with open('db/texts_db.json', 'w') as file:
+						json.dump(self.texts_db, file)
+						
+					with open(filename, 'wb') as file:
+						file.write(text.encode())
+						
+					print('Text saved')
 							
 					
 				elif msg == 'save_text':
@@ -197,21 +197,10 @@ class Server:
 					print('Saving text...')					
 					check_key_expiration(client)
 					
-					if not client.authorized:
-						client.sock.sendall(client.aes.encrypt('888'))
-						continue
-					
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 					text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode("latin-1")
 					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					
-					# decide of response
-					response = '0'
-
-					# send response
-					client.sock.sendall(client.aes.encrypt(response))
-					
-					#if response == '0':
 					self.texts_db[client.username][textname] = filename
 					with open('db/texts_db.json', 'w') as file:
 						json.dump(self.texts_db, file)
@@ -226,19 +215,10 @@ class Server:
 				
 					print('Deleting text...')					
 					check_key_expiration(client)
-					#print('1')
-					if not client.authorized:
-						client.sock.sendall(client.aes.encrypt('888'))
-						continue
-					#print('2')
+
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode()
 					filename = 'data/' + client.username.replace(' ', '_') + '/' + textname.replace(' ', '_') + '.txt'
 					print(textname)
-					# decide of response
-					response = '0'
-
-					# send response
-					client.sock.sendall(client.aes.encrypt(response))
 					
 					del self.texts_db[client.username][textname]
 					with open('db/texts_db.json', 'w') as file:
@@ -254,22 +234,11 @@ class Server:
 					print('Getting texts...')					
 					check_key_expiration(client)
 					print('after')
-					
-					if not client.authorized:
-						print('wtf')
-						client.sock.sendall(client.aes.encrypt('888'))
-						continue
 				
 					keys = list(self.texts_db[client.username].keys())
 					print('keys: ', keys)
 					
-					# decide of response
-					if len(keys) == 0:
-						response = '1'
-					else:
-						response = '0'
 					texts = pickle.dumps(keys)
-					client.sock.sendall(client.aes.encrypt(response))
 					client.sock.sendall(client.aes.encrypt(texts))
 					
 						
@@ -284,15 +253,8 @@ class Server:
 						
 					textname = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 					
-					# decide of response
-					if textname not in self.texts_db[client.username]:
-						response = '1'
-						client.sock.sendall(client.aes.encrypt(response))
-						print('bad')
-					else:
-						response = '0'
-						with open(self.texts_db[client.username][textname], 'rb') as file:
-							text = file.read()
+					with open(self.texts_db[client.username][textname], 'rb') as file:
+						text = file.read()
 						client.sock.sendall(client.aes.encrypt(text))
 						
 

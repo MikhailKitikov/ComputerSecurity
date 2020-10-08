@@ -19,6 +19,7 @@ from Crypto.Hash import SHA256
 from Crypto import Random
 import pickle
 from tkinter.scrolledtext import ScrolledText
+import select
 
 
 MSGLEN = 1024
@@ -51,11 +52,21 @@ def decrypt(key, source, decode=True):
    
 def listen_if_ok():
 	msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+	print('[INFO ok: got msg ', msg)
 	if msg == 'ok':
 		pass
 	elif msg == '999':
 		client.retrieve_session_key()
 	else: pass
+	
+	
+def get_data():
+	r, _, _ = select.select([client.sock], [], [])
+	while True:
+		if r:
+			# ready to receive
+			message = client.sock.recv(MSGLEN)
+			return message
 
 
 ############ helper funcs ###########
@@ -86,7 +97,9 @@ def login_verify():
 	
 	ciphertext = client.aes.encrypt('login'.encode())
 	client.sock.sendall(ciphertext)
+	print('[INFO request sent')
 	listen_if_ok()
+	print('[INFO ok')
 
 	# read credentials
 	username_info = username_verify.get()
@@ -96,13 +109,16 @@ def login_verify():
 	encoded_pass = sha512()
 	encoded_pass.update(password_info.encode('utf-8'))
 	client.sock.sendall(client.aes.encrypt(username_info.encode()))
+	print('[INFO name sent')
 	client.sock.sendall(client.aes.encrypt(encoded_pass.hexdigest()))
+	print('[INFO pass sent')
 
 	# clear
 	password_login_entry.delete(0, END)
 
 	# get response
 	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+	print('[INFO got response')
 	if response == '1':
 		Notifier.show_message('Fail', 'User does not exist', login_screen)
 		username_login_entry.delete(0, END)
@@ -120,7 +136,9 @@ def register_user():
 	# send register request
 	ciphertext = client.aes.encrypt('register')
 	client.sock.sendall(ciphertext)
+	print('[INFO request sent')
 	listen_if_ok()
+	print('[INFO ok')
 
 	# read credentials
 	username_info = username.get()
@@ -130,10 +148,13 @@ def register_user():
 	encoded_pass = sha512()
 	encoded_pass.update(password_info.encode())
 	client.sock.sendall(client.aes.encrypt(username_info))
+	print('[INFO name sent')
 	client.sock.sendall(client.aes.encrypt(encoded_pass.hexdigest()))
+	print('[INFO pass sent')
 
 	# get response
 	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
+	print('[INFO got response')
 	if response == '1':
 		Notifier.show_message('Fail', 'User already exists', register_screen)
 	elif response == '0':
@@ -156,6 +177,13 @@ def delete_register_screen():
 
 ############### notepad ###################
 
+def destroy_rec(wid):
+	if not wid.winfo_children():
+		wid.destroy()
+		return
+	for item in wid.winfo_children():
+		destroy_rec(item)
+
 def notepad_menu():
 	global notepad_menu_screen
 	notepad_menu_screen = Toplevel(main_screen)
@@ -166,7 +194,10 @@ def notepad_menu():
 
 	def on_closing():
 		client.sock.sendall(client.aes.encrypt('logout'))
-#		listen_if_ok()
+		print('[INFO request sent')
+		listen_if_ok()
+		print('[INFO ok')
+		destroy_rec(notepad_menu_screen)
 		notepad_menu_screen.destroy()
 
 	notepad_menu_screen.protocol("WM_DELETE_WINDOW", on_closing)
@@ -188,33 +219,25 @@ def save_new_text(filename, inputtxt, screen):
 	client.sock.sendall(client.aes.encrypt(filename))
 	client.sock.sendall(client.aes.encrypt(encrypted))
 	
-	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
-	if response == '1':
-		Notifier.show_message('Fail', 'Text name is already used', screen)
-	elif response == '0':
-		Notifier.show_message('Success', 'Text saved', screen, True)
-		notepad_menu()
-	else: pass
+	Notifier.show_message('Success', 'Text saved', screen, True)
+	create_notepad_screen.destroy()
+	
 
 def save_text(filename, inputtxt, screen):
 
 	client.sock.sendall(client.aes.encrypt('save_text'))
+	print('[INFO request sent')
 	listen_if_ok()
+	print('[INFO ok')
 
 	text = inputtxt.get("1.0", "end-1c")
 	encrypted = encrypt(client.password, text.encode())
 	client.sock.sendall(client.aes.encrypt(filename))
+	print('[INFO filename sent')
 	client.sock.sendall(client.aes.encrypt(encrypted))
+	print('[INFO text sent')
 	
-	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
-	if response == '1':
-		Notifier.show_message('Fail', 'Cannot complete', screen)
-	elif response == '0':
-		Notifier.show_message('Success', 'Text saved', screen, True)
-		notepad_menu()
-	else: pass
+	Notifier.show_message('Success', 'Text saved', screen, True)
 
 
 def save_as(inputtxt):
@@ -288,16 +311,22 @@ def edit_selected_notepad(textname):
 	# send get request
 	ciphertext = client.aes.encrypt('get_text')
 	client.sock.sendall(ciphertext)
+	print('[INFO request sent')
 	listen_if_ok()
+	print('[INFO ok')
 	
 	ciphertext = client.aes.encrypt(textname)
 	client.sock.sendall(ciphertext)
+	print('[INFO textname sent')
 	
 	text = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	print('[INFO got text')
 	decrypted = decrypt(client.password.encode(), text.decode())
+	print('[INFO decoded')
 	
 	inputtxt.delete(1.0, END)
 	inputtxt.insert(END, decrypted)
+	print('[INFO inserted')
 		
 
 def edit_notepad():
@@ -310,12 +339,13 @@ def edit_notepad():
 	# send edit request
 	ciphertext = client.aes.encrypt('get_texts')
 	client.sock.sendall(ciphertext)
+	print('[INFO request sent get texts')
 	listen_if_ok()
-	
-	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')	
-	pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
-	
+	print('ok')
+	msg = get_data().strip(b'\r\n')
+	print('[INFO got msg:', msg)	
+	pkl = client.aes.decrypt(msg)
+	print('[INFO decoded')
 	listbox = Listbox(edit_notepad_screen, height=20,width=50) 
 	scrollbar = Scrollbar(edit_notepad_screen) 
 	
@@ -354,12 +384,6 @@ def edit_notepad():
 	
 	for values in data: 
 		listbox.insert(END, values) 
-	
-	print('resp', response)
-	if response == '1':
-		messagebox.showerror("not notepads", "empty") 
-	else:
-		pass	
 		
 		
 #### delete #####
@@ -368,17 +392,15 @@ def delete_selected_notepad(textname):
 	# send edit request
 	ciphertext = client.aes.encrypt('delete_text')
 	client.sock.sendall(ciphertext)
+	print('[INFO request sent')
 	listen_if_ok()
+	print('[INFO ok')
 	
 	ciphertext = client.aes.encrypt(textname)
 	client.sock.sendall(ciphertext)
+	print('[INFO text sent')
 	
-	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')	
-	if response == '0':
-		Notifier.show_message('Success', 'Removed!', delete_notepad_screen)
-	else:
-		pass	
+	Notifier.show_message('Success', 'Removed!', delete_notepad_screen)	
 
 
 def delete_notepad():
@@ -391,11 +413,12 @@ def delete_notepad():
 	# send edit request
 	ciphertext = client.aes.encrypt('get_texts')
 	client.sock.sendall(ciphertext)
+	print('[INFO request sent')
 	listen_if_ok()
+	print('[INFO ok')
 	
-	# get response
-	response = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')	
 	pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	print('[INFO decoded')
 	
 	listbox = Listbox(delete_notepad_screen, height=20,width=50) 
 	scrollbar = Scrollbar(delete_notepad_screen) 
@@ -415,8 +438,10 @@ def delete_notepad():
 		else:
 			delete_selected_notepad(val)
 			listbox.delete(ind)
+			print('[INFO deleting selected')
 
 	data = pickle.loads(pkl)
+	print('[INFO load data')
 		
 	display = Button(delete_notepad_screen, height=3,
 					 width=40,
@@ -436,12 +461,7 @@ def delete_notepad():
 	
 	for values in data: 
 		listbox.insert(END, values) 
-	
-	print('resp', response)
-	if response == '1':
-		messagebox.showerror("not notepads", "empty") 
-	else:
-		pass
+	print('[INFO list items inserted')
 
 
 ############### login ###################
@@ -456,6 +476,7 @@ def login():
 
 	def on_closing():
 		login_screen.destroy()
+		print('[INFO login window closing')
 
 	login_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -491,6 +512,7 @@ def register():
 
 	def on_closing():
 		register_screen.destroy()
+		print('[INFO register window closing')
 
 	register_screen.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -550,6 +572,7 @@ class Client:
 
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect((ip, port))
+		print('[INFO] socket created')
 
 		if os.path.isfile('rsa/rsa_priv'):
 			with open('rsa/rsa_pub.pem', 'rb') as file:
@@ -562,19 +585,26 @@ class Client:
 				file.write(self.pub.save_pkcs1('PEM'))
 			with open('rsa/rsa_priv.pem', 'wb') as file:
 				file.write(self.priv.save_pkcs1('PEM'))
+				
+		print('[INFO] RSA generated')
 
 		# send rsa publickey to server
 		msg = self.pub.save_pkcs1('PEM').decode()
 		sent = self.sock.sendall(msg.encode())
 		if sent is not None:
 			raise RuntimeError("socket connection broken")
+		
+		print('[INFO] RSA sent to server')
 			
 		self.retrieve_session_key()
+		
+		print('[INFO] session key retrieved')
 
 	def retrieve_session_key(self):
 		key = rsa.decrypt(self.sock.recv(MSGLEN), self.priv)
 		iv = key
 		self.aes = AES.new(key, AES.MODE_CFB, iv)
+		print('[INFO] session key retrieved')
 
 
 ############ entrypoint ################
@@ -584,4 +614,7 @@ if __name__ == '__main__':
 	global client
 	client = Client(IP, PORT)
 
-	main_account_screen()
+	main_account_screen()		
+			
+			
+			
