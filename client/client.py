@@ -342,9 +342,7 @@ def edit_notepad():
 	print('[INFO request sent get texts')
 	listen_if_ok()
 	print('ok')
-	msg = get_data().strip(b'\r\n')
-	print('[INFO got msg:', msg)	
-	pkl = client.aes.decrypt(msg)
+	pkl = client.aes.decrypt(get_data().strip(b'\r\n'))
 	print('[INFO decoded')
 	listbox = Listbox(edit_notepad_screen, height=20,width=50) 
 	scrollbar = Scrollbar(edit_notepad_screen) 
@@ -417,7 +415,7 @@ def delete_notepad():
 	listen_if_ok()
 	print('[INFO ok')
 	
-	pkl = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n'))
+	pkl = client.aes.decrypt(get_data().strip(b'\r\n'))
 	print('[INFO decoded')
 	
 	listbox = Listbox(delete_notepad_screen, height=20,width=50) 

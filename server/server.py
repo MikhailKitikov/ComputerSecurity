@@ -16,7 +16,7 @@ import select
 MSGLEN = 1024
 IP = '0.0.0.0'
 PORT = 5000
-KEY_EXPIRATION_TIME = 20000000
+KEY_EXPIRATION_TIME = 60
 
 
 def key_expired(created_at):
@@ -28,7 +28,7 @@ def check_key_expiration(client):
 		client.sock.sendall(client.aes.encrypt('999'))
 		client.generate_aes()
 		client.send_aes()
-		print('New sesion key generated for client ', client.username)
+		print('New sesion key generated for client ')
 	else:
 		msg = client.aes.encrypt('ok')
 		client.sock.sendall(msg)
@@ -101,8 +101,8 @@ class Server:
 		while True:
 			try:
 				# receive new message
-				r, _, _ = select.select([client.sock], [], [])
-				if r:
+				readable, _, _ = select.select([client.sock], [], [])
+				if readable:
 					# ready to receive
 					msg = client.aes.decrypt(client.sock.recv(MSGLEN).strip(b'\r\n')).decode('latin-1')
 					print('msg got:', msg)

