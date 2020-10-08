@@ -23,8 +23,8 @@ import select
 
 
 MSGLEN = 1024
-IP = 'localhost'
-PORT = 5000
+IP = '0.0.0.0'
+PORT = 5005
 
 
 def encrypt(key, source, encode=True):

@@ -16,7 +16,7 @@ import select
 MSGLEN = 1024
 IP = '0.0.0.0'
 PORT = 5000
-KEY_EXPIRATION_TIME = 20
+KEY_EXPIRATION_TIME = 20000000
 
 
 def key_expired(created_at):
@@ -267,7 +267,7 @@ class Server:
 					
 
 				elif msg == 'exit':
-					print('Client %s exited' % client.username)
+					print('Client exited')
 					self.clients.remove(client)
 					return
 					
